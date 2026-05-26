@@ -1,14 +1,14 @@
 // ShoppingSystem — CI/CD pipeline for GitHub + Docker
 //
 // Jenkins setup (one-time):
-// 1. Install plugins: Pipeline, GitHub, Docker Pipeline, Credentials Binding, WS Cleanup
+// 1. Install plugins: Pipeline, Git, Docker Pipeline, Credentials Binding, WS Cleanup
 // 2. Jenkins → Manage Jenkins → Credentials → add:
 //    - "github-credentials" (Username + PAT) for private repos / GHCR push
 //    - "docker-registry-credentials" (Username + Token) — GitHub PAT with write:packages for GHCR
 // 3. Create Pipeline job → Pipeline script from SCM → Git → your GitHub repo URL
 // 4. Builds are triggered by Poll SCM (see triggers below) — no GitHub webhook required
 // 5. Job → Configure → Environment: set GITHUB_OWNER to your GitHub username/org
-//    (Optional) Disable "GitHub hook trigger" on the job if that option appears
+// 6. Windows agent: install Git, Docker Desktop, JDK 17; ensure docker and mvnw.cmd are on PATH
 //
 // Image tags: shopping-system:<BUILD_NUMBER> and shopping-system:latest
 
@@ -18,12 +18,9 @@ pipeline {
     environment {
         APP_NAME            = 'shopping-system'
         JAR_NAME            = 'ShoppingSystem-0.0.1-SNAPSHOT.jar'
-        // GitHub Container Registry (change to 'docker.io' + Docker Hub repo if preferred)
         DOCKER_REGISTRY     = 'ghcr.io'
-        // Set GITHUB_OWNER in the Jenkins job environment (your GitHub username or org)
         DOCKER_REPO         = "${DOCKER_REGISTRY}/NyanLinnZaw/${APP_NAME}"
         DOCKER_IMAGE_TAG    = "${BUILD_NUMBER}"
-        // Jenkins credential IDs — do not put secrets in this file
         DOCKER_CREDENTIALS  = 'docker-registry-credentials'
     }
 
@@ -33,9 +30,6 @@ pipeline {
         timeout(time: 30, unit: 'MINUTES')
     }
 
-    // Poll GitHub every 5 minutes for new commits (no webhook needed)
-    // Cron format: MINUTE HOUR DAY MONTH DAY_OF_WEEK
-    // Examples: 'H/5 * * * *' = ~every 5 min | 'H/15 * * * *' = ~every 15 min | 'H * * * *' = hourly
     triggers {
         pollSCM('H/5 * * * *')
     }
@@ -44,20 +38,28 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                // Clones the GitHub repo configured on the Jenkins job (multibranch or pipeline SCM)
                 checkout scm
-                sh 'chmod +x mvnw'
+                script {
+                    if (isUnix()) {
+                        sh 'chmod +x mvnw'
+                    }
+                }
             }
         }
 
         stage('Build') {
             steps {
                 echo 'Compiling and packaging (tests run in next stage)...'
-                sh './mvnw clean package -DskipTests -B'
+                script {
+                    if (isUnix()) {
+                        sh './mvnw clean package -DskipTests -B'
+                    } else {
+                        bat 'mvnw.cmd clean package -DskipTests -B'
+                    }
+                }
             }
             post {
                 success {
-                    // Archive the JAR for traceability and manual deploy
                     archiveArtifacts artifacts: "target/${JAR_NAME}", fingerprint: true
                 }
             }
@@ -65,36 +67,49 @@ pipeline {
 
         stage('Test') {
             steps {
-                echo 'Running unit/integration tests with a temporary MySQL container...'
+                echo 'Running tests with a temporary MySQL container...'
                 script {
-                    // Ephemeral MySQL for @SpringBootTest (app expects MySQL, not H2)
-                    sh '''
-                        docker rm -f jenkins-mysql-test 2>/dev/null || true
-                        docker run -d --name jenkins-mysql-test \
-                            -e MYSQL_ROOT_PASSWORD=testpass \
-                            -e MYSQL_DATABASE=shopping_db \
-                            -p 3307:3306 \
-                            mysql:8.4
-
-                        echo "Waiting for MySQL to be ready..."
-                        for i in $(seq 1 30); do
-                            if docker exec jenkins-mysql-test mysqladmin ping -h localhost -uroot -ptestpass --silent; then
-                                echo "MySQL is up"
-                                break
-                            fi
-                            sleep 2
-                        done
-
-                        ./mvnw test -B \
-                            -Dspring.datasource.url=jdbc:mysql://localhost:3307/shopping_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC \
-                            -Dspring.datasource.username=root \
-                            -Dspring.datasource.password=testpass
-                    '''
+                    if (isUnix()) {
+                        sh '''
+                            docker rm -f jenkins-mysql-test 2>/dev/null || true
+                            docker run -d --name jenkins-mysql-test \
+                                -e MYSQL_ROOT_PASSWORD=testpass \
+                                -e MYSQL_DATABASE=shopping_db \
+                                -p 3307:3306 \
+                                mysql:8.4
+                            echo "Waiting for MySQL..."
+                            for i in $(seq 1 30); do
+                                if docker exec jenkins-mysql-test mysqladmin ping -h localhost -uroot -ptestpass --silent; then
+                                    echo "MySQL is up"
+                                    break
+                                fi
+                                sleep 2
+                            done
+                            ./mvnw test -B \
+                                -Dspring.datasource.url=jdbc:mysql://localhost:3307/shopping_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC \
+                                -Dspring.datasource.username=root \
+                                -Dspring.datasource.password=testpass
+                        '''
+                    } else {
+                        bat '''
+                            docker rm -f jenkins-mysql-test 2>nul
+                            docker run -d --name jenkins-mysql-test -e MYSQL_ROOT_PASSWORD=testpass -e MYSQL_DATABASE=shopping_db -p 3307:3306 mysql:8.4
+                            echo Waiting for MySQL...
+                            ping -n 31 127.0.0.1 >nul
+                            mvnw.cmd test -B "-Dspring.datasource.url=jdbc:mysql://localhost:3307/shopping_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC" -Dspring.datasource.username=root -Dspring.datasource.password=testpass
+                        '''
+                    }
                 }
             }
             post {
                 always {
-                    sh 'docker rm -f jenkins-mysql-test 2>/dev/null || true'
+                    script {
+                        if (isUnix()) {
+                            sh 'docker rm -f jenkins-mysql-test 2>/dev/null || true'
+                        } else {
+                            bat 'docker rm -f jenkins-mysql-test 2>nul'
+                        }
+                    }
                 }
             }
         }
@@ -103,11 +118,17 @@ pipeline {
             steps {
                 echo "Building image ${DOCKER_REPO}:${DOCKER_IMAGE_TAG}"
                 script {
-                    // Requires Docker on the Jenkins agent (Docker socket or Docker-in-Docker)
-                    sh """
-                        docker build -t ${DOCKER_REPO}:${DOCKER_IMAGE_TAG} .
-                        docker tag ${DOCKER_REPO}:${DOCKER_IMAGE_TAG} ${DOCKER_REPO}:latest
-                    """
+                    if (isUnix()) {
+                        sh """
+                            docker build -t ${DOCKER_REPO}:${DOCKER_IMAGE_TAG} .
+                            docker tag ${DOCKER_REPO}:${DOCKER_IMAGE_TAG} ${DOCKER_REPO}:latest
+                        """
+                    } else {
+                        bat """
+                            docker build -t ${DOCKER_REPO}:${DOCKER_IMAGE_TAG} .
+                            docker tag ${DOCKER_REPO}:${DOCKER_IMAGE_TAG} ${DOCKER_REPO}:latest
+                        """
+                    }
                 }
             }
         }
@@ -126,30 +147,49 @@ pipeline {
                     usernameVariable: 'REGISTRY_USER',
                     passwordVariable: 'REGISTRY_PASS'
                 )]) {
-                    sh """
-                        echo "\${REGISTRY_PASS}" | docker login ${DOCKER_REGISTRY} -u "\${REGISTRY_USER}" --password-stdin
-                        docker push ${DOCKER_REPO}:${DOCKER_IMAGE_TAG}
-                        docker push ${DOCKER_REPO}:latest
-                        docker logout ${DOCKER_REGISTRY}
-                    """
+                    script {
+                        if (isUnix()) {
+                            sh """
+                                echo "\${REGISTRY_PASS}" | docker login ${DOCKER_REGISTRY} -u "\${REGISTRY_USER}" --password-stdin
+                                docker push ${DOCKER_REPO}:${DOCKER_IMAGE_TAG}
+                                docker push ${DOCKER_REPO}:latest
+                                docker logout ${DOCKER_REGISTRY}
+                            """
+                        } else {
+                            bat """
+                                @echo off
+                                echo %REGISTRY_PASS%| docker login ${DOCKER_REGISTRY} -u %REGISTRY_USER% --password-stdin
+                                docker push ${DOCKER_REPO}:${DOCKER_IMAGE_TAG}
+                                docker push ${DOCKER_REPO}:latest
+                                docker logout ${DOCKER_REGISTRY}
+                            """
+                        }
+                    }
                 }
             }
         }
 
         stage('Docker Run') {
             steps {
-                // Verify image exists and print deploy hint (full run needs MySQL via docker compose on target host)
-                sh """
-                    docker image inspect ${DOCKER_REPO}:${DOCKER_IMAGE_TAG}
-                    echo "Deploy on server: BUILD_NUMBER=${BUILD_NUMBER} docker compose pull && docker compose up -d"
-                """
+                script {
+                    if (isUnix()) {
+                        sh """
+                            docker image inspect ${DOCKER_REPO}:${DOCKER_IMAGE_TAG}
+                            echo Deploy: BUILD_NUMBER=${BUILD_NUMBER} docker compose pull && docker compose up -d
+                        """
+                    } else {
+                        bat """
+                            docker image inspect ${DOCKER_REPO}:${DOCKER_IMAGE_TAG}
+                            echo Deploy: set BUILD_NUMBER=${BUILD_NUMBER} then docker compose pull ^&^& docker compose up -d
+                        """
+                    }
+                }
             }
         }
     }
 
     post {
         always {
-            // Clean workspace after every build (devops rule)
             cleanWs(deleteDirs: true, patterns: [[pattern: 'target', type: 'INCLUDE']])
         }
         success {
