@@ -57,8 +57,8 @@ pipeline {
                         sh 'docker compose down || true'
                         sh 'docker compose up -d --build'
                     } else {
-                        bat 'docker compose down'
-                        bat 'docker compose up -d --build'
+                        bat 'wsl docker compose down || true'
+                        bat 'wsl docker compose up -d --build'
                     }
                 }
             }
