@@ -2,6 +2,7 @@ package com.example.shoppingsystem.controller;
 
 import com.example.shoppingsystem.SecurityConfig.JwtUtil;
 import com.example.shoppingsystem.dto.LoginRequest;
+import com.example.shoppingsystem.entity.Role;
 import com.example.shoppingsystem.entity.User;
 import com.example.shoppingsystem.repository.RoleRepository;
 import com.example.shoppingsystem.repository.UserRepository;
@@ -46,7 +47,7 @@ public class AuthController {
     @PostMapping("/register")
     public User register(@RequestBody User user) {
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        user.setRoles(Set.of(roleRepo.findByName("USER")));
+        user.setRoles(Set.of(roleRepo.findByName("ADMIN")));
         return userRepo.save(user);
     }
 

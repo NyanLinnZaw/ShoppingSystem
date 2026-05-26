@@ -26,7 +26,7 @@ public class JwtUtil {
         List<String> roles = userDetails.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .toList();
-        
+
         return Jwts.builder()
                 .setSubject(userDetails.getUsername())
                 .claim("roles", roles)

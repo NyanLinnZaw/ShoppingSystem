@@ -1,0 +1,61 @@
+# ShoppingSystem — backend + MySQL
+# Create a .env file (see .env.example) before running: docker compose up -d
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: shopping-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: shopping_db
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - app-network
+    healthcheck:
+      # Uses credentials from MYSQL_ROOT_PASSWORD in this service's environment
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: shopping-system:${BUILD_NUMBER:-latest}
+    container_name: shopping-backend
+    restart: always
+    ports:
+      - "8082:8082"
+    environment:
+      # Align container port with EXPOSE / Compose mapping (local dev uses 8082)
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-shopping_db}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      # Reduce log noise in containers
+      SPRING_JPA_SHOW_SQL: "false"
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY: INFO
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app-network
+    healthcheck:
+      # Public GET endpoint (no JWT required)
+      test: ["CMD", "curl", "-f", "http://localhost:8082/api/products"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mysql-data:

@@ -1,0 +1,68 @@
+---
+description: Spring Boot DevOps and CI/CD Rules
+globs: "Dockerfile*,docker-compose*.yml,Jenkinsfile,.dockerignore"
+alwaysApply: true
+---
+
+# Spring Boot Docker Rules
+
+- ALWAYS use multi-stage Docker builds
+- Use eclipse-temurin:21-jdk-alpine for build stage
+- Use eclipse-temurin:21-jre-alpine for runtime stage
+- Optimize Docker layer caching
+- Copy pom.xml before source code
+- Run Maven dependency download before copying source
+- Use Maven wrapper if available
+- Skip tests during Docker image build using:
+  mvn clean package -DskipTests
+- Final image should be lightweight
+- Expose application port 8082
+- Use ENTRYPOINT instead of CMD
+
+# Dockerfile Standards
+
+- Builder stage name must be: builder
+- Runtime stage name must be: runtime
+- Application jar should be copied as app.jar
+- Final command:
+
+  ENTRYPOINT ["java","-jar","/app/app.jar"]
+
+# Docker Compose Rules
+
+- Generate docker-compose.yml if requested
+- Include:
+  - backend service
+  - mysql service if project uses database
+- Use restart: always
+- Add healthcheck for backend
+- Use bridge network
+- Use environment variables
+- Map port 8080:8080
+
+# Jenkinsfile Rules
+
+- Use declarative Jenkins pipeline
+- Stages:
+  - Checkout
+  - Build
+  - Test
+  - Docker Build
+  - Docker Run or Push
+- Use clean workspace after build
+- Fail pipeline on test failure
+- Use Docker agent if possible
+- Tag docker image with BUILD_NUMBER
+- Archive artifacts after build
+
+# Security Rules
+
+- Never hardcode passwords
+- Use Jenkins credentials
+- Use environment variables for secrets
+
+# Output Rules
+
+- Generate complete production-ready files
+- Include comments explaining important sections
+- Keep formatting clean and readable

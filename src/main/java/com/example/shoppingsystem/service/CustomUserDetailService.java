@@ -24,12 +24,26 @@ public class CustomUserDetailService implements UserDetailsService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
+        String[] roleNames = user.getRoles().stream()
+                .map(role -> role.getName())
+                .map(CustomUserDetailService::normalizeRoleName)
+                .toArray(String[]::new);
+
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getUsername())
                 .password(user.getPassword())
-                .roles(user.getRoles().stream()
-                        .map(role -> role.getName()) // role names should be like "ADMIN" or "USER"
-                        .toArray(String[]::new))
+                .roles(roleNames)
                 .build();
+    }
+
+    /** DB should store ADMIN/USER; Spring Security expects ROLE_ADMIN via .roles() */
+    private static String normalizeRoleName(String name) {
+        if (name == null || name.isBlank()) {
+            return "USER";
+        }
+        if (name.startsWith("ROLE_")) {
+            return name.substring(5);
+        }
+        return name;
     }
 }
