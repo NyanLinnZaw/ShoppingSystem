@@ -6,8 +6,9 @@
 //    - "github-credentials" (Username + PAT) for private repos / GHCR push
 //    - "docker-registry-credentials" (Username + Token) — GitHub PAT with write:packages for GHCR
 // 3. Create Pipeline job → Pipeline script from SCM → Git → your GitHub repo URL
-// 4. Configure GitHub webhook: push events → Jenkins (GitHub plugin or Poll SCM)
-// 5. Job → Configure → Environment or parameters: set GITHUB_OWNER to your GitHub username/org
+// 4. Builds are triggered by Poll SCM (see triggers below) — no GitHub webhook required
+// 5. Job → Configure → Environment: set GITHUB_OWNER to your GitHub username/org
+//    (Optional) Disable "GitHub hook trigger" on the job if that option appears
 //
 // Image tags: shopping-system:<BUILD_NUMBER> and shopping-system:latest
 
@@ -20,7 +21,7 @@ pipeline {
         // GitHub Container Registry (change to 'docker.io' + Docker Hub repo if preferred)
         DOCKER_REGISTRY     = 'ghcr.io'
         // Set GITHUB_OWNER in the Jenkins job environment (your GitHub username or org)
-        DOCKER_REPO         = "${DOCKER_REGISTRY}/${GITHUB_OWNER}/${APP_NAME}"
+        DOCKER_REPO         = "${DOCKER_REGISTRY}/NyanLinnZaw/${APP_NAME}"
         DOCKER_IMAGE_TAG    = "${BUILD_NUMBER}"
         // Jenkins credential IDs — do not put secrets in this file
         DOCKER_CREDENTIALS  = 'docker-registry-credentials'
@@ -30,6 +31,13 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timestamps()
         timeout(time: 30, unit: 'MINUTES')
+    }
+
+    // Poll GitHub every 5 minutes for new commits (no webhook needed)
+    // Cron format: MINUTE HOUR DAY MONTH DAY_OF_WEEK
+    // Examples: 'H/5 * * * *' = ~every 5 min | 'H/15 * * * *' = ~every 15 min | 'H * * * *' = hourly
+    triggers {
+        pollSCM('H/5 * * * *')
     }
 
     stages {
