@@ -19,6 +19,22 @@ pipeline {
             }
         }
 
+        stage('Git Test') {
+            steps {
+                echo 'Testing Git access...'
+
+                script {
+                    if (isUnix()) {
+                        sh 'git --version'
+                        sh 'git ls-remote https://github.com/NyanLinnZaw/ShoppingSystem.git'
+                    } else {
+                        bat 'git --version'
+                        bat 'git ls-remote https://github.com/NyanLinnZaw/ShoppingSystem.git'
+                    }
+                }
+            }
+        }
+
         stage('Build JAR') {
             steps {
                 echo 'Build Spring Boot JAR'
