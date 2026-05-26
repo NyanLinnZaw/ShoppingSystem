@@ -57,7 +57,7 @@ pipeline {
                         sh 'docker compose down || true'
                         sh 'docker compose up -d --build'
                     } else {
-                        bat 'docker compose down 2>nul'
+                        bat 'docker compose down'
                         bat 'docker compose up -d --build'
                     }
                 }
