@@ -1,47 +1,14 @@
-// ShoppingSystem — Jenkins CI/CD (Windows + Linux)
-//
-// Jenkins one-time setup:
-// 1. Manage Jenkins → Tools → Git → Add:
-//      Name: Default
-//      Path: C:\Users\nyanlinnzaw\AppData\Local\Programs\Git\cmd\git.exe
-// 2. Credentials → github-credentials (Username + GitHub PAT)
-// 3. Optional: add Git/Docker to System PATH and restart Jenkins service
-// 4. Poll SCM enabled below (no GitHub webhook)
-//
-// Windows: Jenkins *service* does not inherit your user PATH — see Prepare Tools stage.
+// Windows Jenkins agent: uses bat + mvnw.cmd (no sh/bash required)
+// Linux agent: uses sh + ./mvnw automatically via isUnix()
 
 pipeline {
     agent any
-
-    environment {
-        WIN_GIT    = 'C:\\Users\\nyanlinnzaw\\AppData\\Local\\Programs\\Git\\cmd'
-        WIN_DOCKER = 'C:\\Program Files\\Docker\\Docker\\resources\\bin'
-    }
 
     triggers {
         pollSCM('H/5 * * * *')
     }
 
     stages {
-
-        stage('Prepare Tools') {
-            steps {
-                script {
-                    if (!isUnix()) {
-                        env.PATH = "${WIN_GIT};${WIN_DOCKER};${env.PATH}"
-                        bat """
-                            @echo off
-                            echo === Tool check ===
-                            echo PATH=%PATH%
-                            git --version
-                            docker --version
-                        """
-                    } else {
-                        sh 'git --version && docker --version'
-                    }
-                }
-            }
-        }
 
         stage('Git Checkout') {
             steps {
@@ -51,6 +18,22 @@ pipeline {
                     url: 'https://github.com/NyanLinnZaw/ShoppingSystem.git'
             }
         }
+
+//         stage('Git Test') {
+//             steps {
+//                 echo 'Testing Git access...'
+//
+//                 script {
+//                     if (isUnix()) {
+//                         sh 'git --version'
+//                         sh 'git ls-remote https://github.com/NyanLinnZaw/ShoppingSystem.git'
+//                     } else {
+//                         bat 'git --version'
+//                         bat 'git ls-remote https://github.com/NyanLinnZaw/ShoppingSystem.git'
+//                     }
+//                 }
+//             }
+//         }
 
         stage('Build JAR') {
             steps {
@@ -101,10 +84,10 @@ pipeline {
 
     post {
         success {
-            echo 'Deployment successful — http://localhost:8082'
+            echo 'Deployment successful'
         }
         failure {
-            echo 'Deployment failed — check Prepare Tools (git/docker) then Build/Docker stages.'
+            echo 'Deployment failed'
         }
     }
 }
