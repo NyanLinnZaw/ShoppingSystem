@@ -56,7 +56,7 @@ pipeline {
             steps {
                 echo 'Waiting for application startup...'
 
-                bat 'timeout /t 25'
+                bat 'ping 127.0.0.1 -n 25 > nul'
 
                 echo 'Checking running containers...'
 
