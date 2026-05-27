@@ -65,15 +65,7 @@ pipeline {
                 echo 'Testing backend API...'
 
                 bat '''
-                powershell -Command ^
-                "try { ^
-                    $response = Invoke-WebRequest -Uri %APP_URL% -UseBasicParsing; ^
-                    Write-Host 'Application is running successfully'; ^
-                    exit 0 ^
-                } catch { ^
-                    Write-Host 'Application check failed'; ^
-                    exit 1 ^
-                }"
+                powershell -Command "try { $response = Invoke-WebRequest -Uri http://localhost:8082/api/products -UseBasicParsing; Write-Host 'Application is running successfully'; exit 0 } catch { Write-Host 'Application check failed'; exit 1 }"
                 '''
             }
         }
