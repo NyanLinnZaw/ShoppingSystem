@@ -1,6 +1,3 @@
-// Windows Jenkins agent: uses bat + mvnw.cmd (no sh/bash required)
-// Linux agent: uses sh + ./mvnw automatically via isUnix()
-
 pipeline {
     agent any
 
@@ -8,86 +5,100 @@ pipeline {
         pollSCM('H/5 * * * *')
     }
 
+    environment {
+        APP_URL = 'http://localhost:8082/api/products'
+    }
+
     stages {
 
         stage('Git Checkout') {
             steps {
                 echo 'Checkout source code'
+
                 git branch: 'main',
                     credentialsId: 'github-credentials',
                     url: 'https://github.com/NyanLinnZaw/ShoppingSystem.git'
             }
         }
 
-//         stage('Git Test') {
-//             steps {
-//                 echo 'Testing Git access...'
-//
-//                 script {
-//                     if (isUnix()) {
-//                         sh 'git --version'
-//                         sh 'git ls-remote https://github.com/NyanLinnZaw/ShoppingSystem.git'
-//                     } else {
-//                         bat 'git --version'
-//                         bat 'git ls-remote https://github.com/NyanLinnZaw/ShoppingSystem.git'
-//                     }
-//                 }
-//             }
-//         }
-
-        stage('Build JAR') {
+        stage('Verify Tools') {
             steps {
-                echo 'Build Spring Boot JAR'
-                script {
-                    if (isUnix()) {
-                        sh 'chmod +x mvnw'
-                        sh './mvnw clean package -DskipTests -B'
-                    } else {
-                        bat 'mvnw.cmd clean package -DskipTests -B'
-                    }
-                }
+                echo 'Checking required tools...'
+
+                bat 'git --version'
+                bat 'java -version'
+                bat 'docker --version'
+                bat 'docker compose version'
+            }
+        }
+
+        stage('Build Spring Boot JAR') {
+            steps {
+                echo 'Building Spring Boot application...'
+
+                bat 'mvnw.cmd clean package -DskipTests -B'
             }
         }
 
         stage('Docker Compose Deploy') {
             steps {
-                echo 'Deploy using Docker Compose'
-                script {
-                    if (isUnix()) {
-                        sh 'docker compose down || true'
-                        sh 'docker compose up -d --build'
-                    } else {
-                        bat 'wsl bash -lc "docker compose down || true"'
-                        bat 'wsl bash -lc "docker compose up -d --build"'
-                    }
-                }
+                echo 'Stopping old containers...'
+
+                bat 'docker compose down'
+
+                echo 'Building and starting containers...'
+
+                bat 'docker compose up -d --build'
             }
         }
 
         stage('Verify Deployment') {
             steps {
-                echo 'Check container status'
-                script {
-                    if (isUnix()) {
-                        sh 'docker ps'
-                        sh 'sleep 20'
-                        sh 'curl -f http://localhost:8082/api/products'
-                    } else {
-                        bat 'docker ps'
-                        bat 'ping -n 21 127.0.0.1 >nul'
-                        bat 'curl -f http://localhost:8082/api/products'
-                    }
-                }
+                echo 'Waiting for application startup...'
+
+                bat 'timeout /t 25'
+
+                echo 'Checking running containers...'
+
+                bat 'docker ps'
+
+                echo 'Testing backend API...'
+
+                bat '''
+                powershell -Command ^
+                "try { ^
+                    $response = Invoke-WebRequest -Uri %APP_URL% -UseBasicParsing; ^
+                    Write-Host 'Application is running successfully'; ^
+                    exit 0 ^
+                } catch { ^
+                    Write-Host 'Application check failed'; ^
+                    exit 1 ^
+                }"
+                '''
             }
         }
     }
 
     post {
+
         success {
-            echo 'Deployment successful'
+            echo '========================================'
+            echo 'Deployment completed successfully'
+            echo 'Backend URL: http://localhost:8082'
+            echo '========================================'
         }
+
         failure {
+            echo '========================================'
             echo 'Deployment failed'
+            echo 'Checking Docker container logs...'
+            echo '========================================'
+
+            bat 'docker ps -a'
+
+            bat 'docker logs shopping-backend'
+
+            bat 'docker logs shopping-mysql'
         }
     }
 }
