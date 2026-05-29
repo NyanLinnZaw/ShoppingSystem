@@ -10,11 +10,9 @@ pipeline {
     }
 
     stages {
-
         stage('Git Checkout') {
             steps {
                 echo 'Checkout source code'
-
                 git branch: 'main',
                     credentialsId: 'github-credentials',
                     url: 'https://github.com/NyanLinnZaw/ShoppingSystem.git'
@@ -48,7 +46,8 @@ pipeline {
                 bat 'ping 127.0.0.1 -n 25 > nul'
                 bat 'docker ps'
                 bat '''
-                powershell -Command "try { Invoke-WebRequest -Uri $env:APP_URL -UseBasicParsing | Out-Null; Write-Host 'Application is running successfully'; exit 0 } catch { Write-Host 'Application check failed'; exit 1 }"
+                    powershell -NoProfile -Command ^
+                        "try { Invoke-WebRequest -Uri '%APP_URL%' -UseBasicParsing | Out-Null; exit 0 } catch { exit 1 }"
                 '''
             }
         }
@@ -57,14 +56,13 @@ pipeline {
     post {
         success {
             echo '========================================'
-            echo 'Deployment completed successfully'
-            echo '========================================'
+            echo 'Pipeline completed successfully.'
             echo 'Backend URL: http://localhost:8082'
+            echo '========================================'
         }
-
         failure {
             echo '========================================'
-            echo 'Deployment failed'
+            echo 'Pipeline failed.'
             echo '========================================'
             bat 'docker ps -a'
             bat 'docker compose logs backend'
