@@ -9,15 +9,15 @@ pipeline {
         APP_URL = 'http://localhost:8082/api/products'
     }
 
-    stages {
-        stage('Git Checkout') {
-            steps {
-                echo 'Checkout source code'
-                git branch: 'main',
-                    credentialsId: 'github-credentials',
-                    url: 'https://github.com/NyanLinnZaw/ShoppingSystem.git'
-            }
-        }
+//     stages {
+//         stage('Git Checkout') {
+//             steps {
+//                 echo 'Checkout source code'
+//                 git branch: 'main',
+//                     credentialsId: 'github-credentials',
+//                     url: 'https://github.com/NyanLinnZaw/ShoppingSystem.git'
+//             }
+//         }
 
         stage('Verify Tools') {
             steps {
