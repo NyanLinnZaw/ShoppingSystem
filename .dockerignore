@@ -1,41 +1,34 @@
 # Build outputs
 target/
-build/
-out/
 
-# Version control and IDE
+# VCS / IDE
 .git/
 .gitignore
-.gitattributes
 .idea/
 *.iml
-*.ipr
-*.iws
 .vscode/
 .cursor/
 
-# Maven (wrapper scripts are copied; only ignore local cache)
+# Maven (keep mvnw / .mvn)
 .mvn/wrapper/maven-wrapper.jar
 
-# Docker and CI (avoid recursive context)
+# Docker / CI
 Dockerfile*
 docker-compose*.yml
 .dockerignore
 Jenkinsfile
 
-# Docs and local env (never bake secrets into images)
+# Docs / env / secrets
 *.md
 .env
 .env.*
-!.env.example
 
-# OS and logs
+# OS / logs
 .DS_Store
 Thumbs.db
 *.log
-*.tmp
-*.swp
+hs_err_pid*
 
-# Test and coverage artifacts
-coverage/
-*.exec
+# Test artifacts
+**/surefire-reports/
+**/failsafe-reports/

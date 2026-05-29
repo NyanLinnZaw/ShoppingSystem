@@ -1,68 +1,91 @@
 ---
-description: Spring Boot DevOps and CI/CD Rules
+description: Spring Boot Docker rules — reusable across Maven projects
 globs: "Dockerfile*,docker-compose*.yml,Jenkinsfile,.dockerignore"
 alwaysApply: true
 ---
 
-# Spring Boot Docker Rules
+# Scope
 
-- ALWAYS use multi-stage Docker builds
-- Use eclipse-temurin:21-jdk-alpine for build stage
-- Use eclipse-temurin:21-jre-alpine for runtime stage
-- Optimize Docker layer caching
-- Copy pom.xml before source code
-- Run Maven dependency download before copying source
-- Use Maven wrapper if available
-- Skip tests during Docker image build using:
-  mvn clean package -DskipTests
-- Final image should be lightweight
-- Expose application port 8082
-- Use ENTRYPOINT instead of CMD
+When asked to generate Docker files, create **only** at project root:
 
-# Dockerfile Standards
+- `Dockerfile`
+- `docker-compose.yml`
+- `.dockerignore`
 
-- Builder stage name must be: builder
-- Runtime stage name must be: runtime
-- Application jar should be copied as app.jar
-- Final command:
+Do not add README or other files unless requested.
 
-  ENTRYPOINT ["java","-jar","/app/app.jar"]
+# Discover from project (never hardcode in rules)
 
-# Docker Compose Rules
+Before writing, read the repo and derive:
 
-- Generate docker-compose.yml if requested
-- Include:
-  - backend service
-  - mysql service if project uses database
-- Use restart: always
-- Add healthcheck for backend
-- Use bridge network
-- Use environment variables
-- Map port 8080:8080
+| Value | Source |
+|-------|--------|
+| Java version | `pom.xml` → `<java.version>` |
+| JAR name | `pom.xml` → `<artifactId>-*.jar` |
+| App port | `application.properties` / `.yml` → `server.port` (default 8080) |
+| DB type & name | datasource URL in config; include DB service in Compose only if project uses one |
+| Image/service names | lowercase kebab-case from artifact or app name |
+| Health URL | public GET endpoint (no auth) from controllers; fallback `/actuator/health` if actuator exists |
 
-# Jenkinsfile Rules
+# Dockerfile
 
-- Use declarative Jenkins pipeline
-- Stages:
-  - Checkout
-  - Build
-  - Test
-  - Docker Build
-  - Docker Run or Push
-- Use clean workspace after build
-- Fail pipeline on test failure
-- Use Docker agent if possible
-- Tag docker image with BUILD_NUMBER
-- Archive artifacts after build
+- Line 1: `# syntax=docker/dockerfile:1`
+- Multi-stage: `builder` → `runtime`
+- Base images: `eclipse-temurin:{java}-jdk-alpine` / `eclipse-temurin:{java}-jre-alpine`
+- Use Maven wrapper (`mvnw`) when present; copy `pom.xml` + `dependency:go-offline` before `src/`
+- Build: `./mvnw clean package -DskipTests -B`
+- Runtime: install `curl`, non-root user `spring`, copy JAR as `/app/app.jar`
+- `EXPOSE` discovered port; `ENTRYPOINT` (not CMD) with `-XX:+UseContainerSupport` and `-XX:MaxRAMPercentage=75.0`
+- Short section comments (`# ---`)
 
-# Security Rules
+# docker-compose.yml
 
-- Never hardcode passwords
-- Use Jenkins credentials
-- Use environment variables for secrets
+- Services: `backend` + DB service (e.g. `mysql`) when project uses a database
+- `restart: always`, bridge network `app-network`, named volume for DB data
+- Backend: build from `.`, image `{app-name}:${BUILD_NUMBER:-latest}`, port `{port}:{port}`
+- DB hostname in JDBC URL = Docker service name (e.g. `mysql`)
+- Spring env vars override config: `SERVER_PORT`, `SPRING_DATASOURCE_*`, sensible JPA/logging defaults
+- `depends_on` DB with `condition: service_healthy`
+- Healthchecks: DB ping command; backend `curl -f http://localhost:{port}{health-path}`
+- Header comment: app name + note to use `.env` if applicable
 
-# Output Rules
+# .dockerignore
 
-- Generate complete production-ready files
-- Include comments explaining important sections
-- Keep formatting clean and readable
+Grouped sections: build outputs, VCS/IDE, Maven (keep `mvnw`/`.mvn`, ignore `maven-wrapper.jar`), Docker/CI files, docs/env secrets, OS/logs, test artifacts.
+
+Must exclude: `target/`, `.git/`, `.cursor/`, `Dockerfile*`, `docker-compose*.yml`, `.env`, `*.md`
+
+# Jenkinsfile (when requested)
+
+Create **only** `Jenkinsfile` at project root. Read `pom.xml`, application config, controllers, and existing `docker-compose.yml` first.
+
+| Value | Source |
+|-------|--------|
+| `APP_URL` | `http://localhost:{port}{health-path}` from Discover table |
+| Git branch | `main` unless user specifies |
+| Git `credentialsId` | user prompt (e.g. `github-credentials`) |
+| Git `url` | user prompt or `git remote get-url origin` |
+| Maven build | `mvnw.cmd clean package -DskipTests -B` (Windows agent) |
+| Failure logs | `docker compose logs backend` and `docker compose logs mysql` (match compose service names) |
+
+**Pipeline:** declarative, `agent any`, `triggers { pollSCM('H/5 * * * *') }`, `environment { APP_URL = '...' }`.
+
+**Stages (exact names, in order):** Git Checkout → Verify Tools → Build Spring Boot JAR → Docker Compose Deploy → Verify Deployment.
+
+- **Git Checkout** — `git` step with branch, `credentialsId`, `url`; echo `Checkout source code`
+- **Verify Tools** — `bat`: `git --version`, `java -version`, `docker --version`, `docker compose version`
+- **Build Spring Boot JAR** — `bat 'mvnw.cmd clean package -DskipTests -B'`
+- **Docker Compose Deploy** — `docker compose down` then `docker compose up -d --build`
+- **Verify Deployment** — `ping 127.0.0.1 -n 25 > nul`, `docker ps`, PowerShell `Invoke-WebRequest` to `APP_URL` (exit 1 on failure)
+
+Use `bat` for all shell steps (Windows Jenkins agent). No separate Test stage, no `docker push`, no `BUILD_NUMBER` image tag unless user asks.
+
+**post success:** banner echoes + `Backend URL: http://localhost:{port}`
+
+**post failure:** banner + `docker ps -a` + `docker compose logs` for backend and DB services
+
+Do not add README or other files unless requested.
+
+# Security
+
+Use env vars for secrets. No production passwords in committed files.
