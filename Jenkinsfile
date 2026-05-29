@@ -9,7 +9,7 @@ pipeline {
         APP_URL = 'http://localhost:8082/api/products'
     }
 
-//     stages {
+    stages {
 //         stage('Git Checkout') {
 //             steps {
 //                 echo 'Checkout source code'
