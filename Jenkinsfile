@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     triggers {
-        pollSCM('* * * * *')
+        pollSCM('H/5 * * * *')
     }
 
     environment {
@@ -47,7 +47,15 @@ pipeline {
                 bat 'docker ps'
                 bat '''
                     powershell -NoProfile -Command ^
-                    "try { Invoke-WebRequest -Uri '%APP_URL%' -UseBasicParsing | Out-Null; exit 0 } catch { exit 1 }"
+                      "$url = '%APP_URL%'; ^
+                       for ($i = 0; $i -lt 24; $i++) { ^
+                         try { ^
+                           $r = Invoke-WebRequest -Uri $url -UseBasicParsing; ^
+                           if ($r.StatusCode -eq 200) { Write-Host \"API ready\"; exit 0 } ^
+                         } catch { Write-Host \"Attempt $($i + 1)/24: not ready yet\" } ^
+                         Start-Sleep -Seconds 5 ^
+                       }; ^
+                       Write-Host \"API not ready after 120s\"; exit 1"
                 '''
             }
         }
@@ -56,13 +64,13 @@ pipeline {
     post {
         success {
             echo '========================================'
-            echo '  ShoppingSystem pipeline succeeded'
+            echo '  DEPLOYMENT SUCCESSFUL'
             echo '========================================'
             echo 'Backend URL: http://localhost:8082'
         }
         failure {
             echo '========================================'
-            echo '  ShoppingSystem pipeline failed'
+            echo '  DEPLOYMENT FAILED'
             echo '========================================'
             bat 'docker ps -a'
             bat 'docker compose logs backend'

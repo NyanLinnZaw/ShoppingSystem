@@ -7,10 +7,12 @@ target/
 # VCS / IDE
 .git/
 .gitignore
+.cursor/
 .idea/
 *.iml
 .vscode/
-.cursor/
+*.swp
+*.swo
 
 # Maven (keep mvnw / .mvn; ignore wrapper jar)
 .mvn/wrapper/maven-wrapper.jar

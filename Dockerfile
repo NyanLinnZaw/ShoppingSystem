@@ -3,10 +3,10 @@
 # --- Build stage ---
 FROM eclipse-temurin:17-jdk-alpine AS builder
 
-WORKDIR /build
+WORKDIR /app
 
 COPY mvnw ./
-COPY .mvn/ .mvn/
+COPY .mvn .mvn
 COPY pom.xml ./
 
 RUN chmod +x mvnw && ./mvnw dependency:go-offline -B
@@ -23,7 +23,7 @@ RUN apk add --no-cache curl \
 
 WORKDIR /app
 
-COPY --from=builder /build/target/ShoppingSystem-*.jar /app/app.jar
+COPY --from=builder /app/target/ShoppingSystem-*.jar /app/app.jar
 
 RUN chown spring:spring /app/app.jar
 
