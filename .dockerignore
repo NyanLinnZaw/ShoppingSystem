@@ -1,0 +1,36 @@
+# Build outputs
+target/
+*.jar
+*.war
+*.class
+
+# VCS / IDE
+.git/
+.gitignore
+.idea/
+*.iml
+.vscode/
+.cursor/
+
+# Maven (keep mvnw / .mvn; ignore wrapper jar)
+.mvn/wrapper/maven-wrapper.jar
+
+# Docker / CI
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Docs / env / secrets
+*.md
+.env
+.env.*
+
+# OS / logs
+.DS_Store
+Thumbs.db
+*.log
+logs/
+
+# Test artifacts
+**/test-results/
+**/surefire-reports/
