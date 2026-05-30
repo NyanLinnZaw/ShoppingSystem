@@ -46,16 +46,7 @@ pipeline {
                 bat 'ping 127.0.0.1 -n 25 > nul'
                 bat 'docker ps'
                 bat '''
-                    powershell -NoProfile -Command ^
-                      "$url = '%APP_URL%'; ^
-                       for ($i = 0; $i -lt 24; $i++) { ^
-                         try { ^
-                           $r = Invoke-WebRequest -Uri $url -UseBasicParsing; ^
-                           if ($r.StatusCode -eq 200) { Write-Host \"API ready\"; exit 0 } ^
-                         } catch { Write-Host \"Attempt $($i + 1)/24: not ready yet\" } ^
-                         Start-Sleep -Seconds 5 ^
-                       }; ^
-                       Write-Host \"API not ready after 120s\"; exit 1"
+                    powershell -Command "try { $response = Invoke-WebRequest -Uri http://localhost:8082/api/products -UseBasicParsing; Write-Host 'Application is running successfully'; exit 0 } catch { Write-Host 'Application check failed'; exit 1 }"
                 '''
             }
         }
